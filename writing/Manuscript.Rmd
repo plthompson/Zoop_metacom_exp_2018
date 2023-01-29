@@ -1,0 +1,557 @@
+---
+title: "Biotic interactions structure zooplankton metacommunity dynamics following a summer heatwave"
+author: "| Patrick L. Thompson$^1$^[Corresponding author: patrick.thompson@zoology.ubc.ca], Coreen Forbes$^1$, Joey R. Bernhardt$^{1,2}$, \n| Kaleigh E. Davis$^1$, Keila A. Stark$^1$, Evgeniya Yangel$^1$, Felipe E. Amadeo$^1$,\n| Natalie E. Westwood$^1$, Mary I. O'Connor$^1$ \n|\n|
+  $^1$Biodiversity Research Center and the Department of Zoology,\n| University of British Columbia, Vancouver, B.C., Canada\n|
+  $^2$Department of Integrative Biology,\n| University of Guelph, Guelph, Ontario, Canada\n"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+    bookdown::pdf_document2:
+      toc: false
+      number_sections: false
+      fig_caption: true
+      keep_tex: false
+csl: ecology-letters.csl
+bibliography: TEAMM_Zoop.bib
+always_allow_html: true
+link-citations: yes
+header-includes:
+  \usepackage{gensymb}
+  \usepackage[left]{lineno}
+  \linenumbers
+  \newcommand{\beginsupplement}{
+  \setcounter{equation}{0}
+  \renewcommand{\theequation}{S.\arabic{equation}}
+  \setcounter{table}{0}  
+  \renewcommand{\thetable}{S\arabic{table}} 
+  \setcounter{figure}{0} 
+  \renewcommand{\thefigure}{S\arabic{figure}}}
+---
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE, include = FALSE}
+# devtools::install_github("cboettig/knitcitations@v1")
+library(knitcitations); cleanbib()
+cite_options(citation_format = "pandoc", check.entries=FALSE)
+library(bibtex)
+library(knitr)
+library(kableExtra)
+
+library(tidyverse)
+library(patchwork)
+library(Hmsc)
+library(lubridate)
+library(abind)
+library(vegan)
+library(rstan)
+library(magick)
+
+source("plt_plot_theme.R")
+
+theme_set(plt_theme)
+```
+
+```{r, loadData, echo=FALSE, include = FALSE}
+load("../data/zoop_data.RData")
+```
+
+```{r, HMSC, echo=FALSE, include = FALSE}
+Zoop_data$dispersal <- factor(Zoop_data$dispersal, ordered= TRUE)
+
+studyDesign <- data.frame(tank = factor(Zoop_data$tank), metacommunity = factor(Zoop_data$metacommunity))
+
+rL <- HmscRandomLevel(units = studyDesign$tank)
+rL_meta <- HmscRandomLevel(units = studyDesign$metacommunity)
+
+week <- data.frame(week = unique(Zoop_data$week))
+rownames(week) <- unique(studyDesign$week)
+rL_time <- HmscRandomLevel(sData = week)
+
+Y <- data.matrix(Zoop_data %>% dplyr::select(diaphanosoma, daphnia, scapholeberis, simocephalus, chaoborus, chironomidae,cyclopoida, calanoida, acari, ostracoda))
+Y_pa <- Y
+Y_pa[Y_pa>0] <-1
+
+XData <- data.frame(temp = Zoop_data$temp_mean, dispersal = Zoop_data$dispersal, watts = Zoop_data$wattage, week = Zoop_data$week)
+XData$temp_stnd <- (XData$temp - mean(XData$temp))/sd(XData$temp)
+XData$week_stnd <- (XData$week - mean(XData$week))/sd(XData$week)
+
+perman <- adonis2(Y ~ watts * dispersal * week, strata = studyDesign$tank:studyDesign$metacommunity, method = "bray", data = XData)
+perman4 <- adonis2(Y[XData$week == 4,] ~ watts * dispersal * week, strata = studyDesign$metacommunity[1:48], method = "bray", data = XData[XData$week == 4,])
+perman8 <- adonis2(Y[XData$week == 8,] ~ watts * dispersal * week, strata = studyDesign$metacommunity[1:48], method = "bray", data = XData[XData$week == 8,])
+perman12 <- adonis2(Y[XData$week == 12,] ~ watts * dispersal * week, strata = studyDesign$metacommunity[1:48], method = "bray", data = XData[XData$week == 12,])
+
+
+m <- Hmsc(Y = Y, 
+          XData = XData, 
+          XFormula = ~ poly(temp_stnd, degree = 2, raw = TRUE) * dispersal + week_stnd, 
+          studyDesign = studyDesign, 
+          ranLevels = list(tank = rL, metacommunity = rL_meta), 
+          distr = "poisson")
+
+thin <- 1000
+samples <- 250
+transient <- ceiling(0.5*thin*samples)
+
+test.time <- system.time(
+  mtest <- sampleMcmc(m, samples = 10, thin = 1, transient = 10, verbose = FALSE,
+                      nChains = 1, nParallel = 1))#, initPar = "fixed effects"))
+
+print(paste("estimated to take", round(((samples*thin + transient) * 4/4 * test.time[3]/20) / 60/60,digits = 2), "hours", sep = " "))
+
+#m <- sampleMcmc(m, thin = thin, samples = samples, transient = transient, nChains = 4, nParallel = 4)
+#save(m, file = "../data/zooplankton/HMSC_m.RData")
+
+load("../data/HMSC_m.RData")
+
+preds = computePredictedValues(m)
+MF <- evaluateModelFit(hM = m, predY = preds)
+
+VP = computeVariancePartitioning(m, group = c(1,1,1,1,1,2,1,1,1,1),groupnames=c("temp * dispersal","week"))
+
+VP.df <- as.data.frame(VP$vals) %>% 
+  mutate(effect = factor(c("temp * dispersal","time", "mesocosm", "metacommunity"), 
+                         levels = rev(c("temp * dispersal","time","mesocosm", "metacommunity")), ordered = TRUE)) %>% 
+  gather(key = species, value = variance, -effect) %>% 
+  group_by(species) %>% 
+  mutate(tempR2 = variance[effect == "temp * dispersal"]) %>% 
+  mutate(species = str_to_title(species))
+
+hold <- VP.df %>% filter(effect == "dispersal") %>% arrange(desc(tempR2))
+
+R2.df <- data.frame(R2 = round(MF$SR2,2), species = str_to_title(colnames(m$Y)))
+
+VP.df <- left_join(VP.df, R2.df)
+```
+
+```{r convergence, echo=FALSE, include = FALSE}
+mcmc.list2array <-
+  function(x) {
+    arr <- array(NA_real_,
+                 dim = c(nrow(x[[1]]), length(x), ncol(x[[1]])))
+    dimnames(arr)[[3]] <- colnames(x[[1]])
+    for(i in seq_along(x)) arr[,i,] <- as.matrix(x[[i]])
+    return(arr)
+  }
+
+  mpost <- convertToCodaObject(m)
+  beta <- mcmc.list2array(mpost$Beta)
+  ge.beta <- sapply(1:dim(beta)[3], FUN = function(x) Rhat(sims = beta[,,x]))
+  gamma <- mcmc.list2array(mpost$Gamma)
+  ge.gamma <- sapply(1:dim(gamma)[3], FUN = function(x) Rhat(sims = gamma[,,x]))
+  V <- mcmc.list2array(mpost$V)
+  ge.V <- sapply(1:dim(V)[3], FUN = function(x) Rhat(sims = V[,,x]))
+  Omega_trawl <- mcmc.list2array(mpost$Omega[[1]])
+  ge.omega_trawl <- sapply(1:dim(Omega_trawl)[3], FUN = function(x) Rhat(sims = Omega_trawl[,,x]))
+  Omega_time <- mcmc.list2array(mpost$Omega[[2]])
+  ge.omega_time <- sapply(1:dim(Omega_time)[3], FUN = function(x) Rhat(sims = Omega_time[,,x]))
+
+  converge.df <- rbind(data.frame(parameter = "beta", ge = ge.beta),
+        data.frame(parameter = "gamma", ge = ge.gamma),
+        data.frame(parameter = "V", ge = ge.V)
+        )
+
+```
+# Abstract
+Despite the key role of biotic interactions in structuring ecological communities, their influence is often overlooked in predictions of how communities respond to environmental change. Here, we present an experiment that tests hypotheses based on metacommunity theory about how abiotic responses, biotic interactions, and dispersal jointly determine the response of ecological communities to environmental perturbations. We established experimental zooplankton metacommunities across spatial temperature gradients, connected by three levels of dispersal, that experienced natural temporal variation in ambient temperature. Prior to a mid-summer heatwave, community composition varied across the spatial temperature gradients. The heatwave homogenized the metacommunities and when conditions cooled, communities diverged into multiple compositional states that were not associated with temperature. These states appear to have been driven by biotic interactions that prevented the reestablishment of the pre-heatwave thermal compositional gradients. This highlights how biotic interactions can prevent metacommunities from tracking temperature changes via dispersal-facilitated species sorting.
+
+# Introduction
+
+As the climate changes, extreme weather events, such as heatwaves, droughts, and storms, are increasing in frequency and intensity [@ipcc2021], placing ecological communities under considerable stress [@hesketh2022]. To design strategies aimed at mitigating the impacts of climate change on natural ecosystems, we require a sound understanding of the processes that determine how species and ecological communities respond to environmental change and extreme events. According to metacommunity theory, the response of communities to environmental change should depend on the interplay between three general processes: density-independent population responses to abiotic conditions, density-dependent biotic interactions (i.e., interactions between species), and dispersal between communities [@thompson2020]. There is considerable experimental evidence that each of these processes can play a key role in governing community responses to environmental change [summarized in @leibold2018]. Though it is accepted that these processes explain community responses to environmental change and extreme events, we still lack clear empirical examples to help understand the relative importance of spatial processes and biotic interactions in metacommunity change. 
+
+Temperature is a principal determinant of species' performance and the composition of ecological communities. In controlled environments, species exhibit strong and predictable thermal response curves that govern rates of growth [@deutsch2008; @bernhardt2018; @vandievel2019], equilibrium abundances [@bernhardt2018a], and competitive outcomes [@usinowicz2021]. Variation in temperature is a key driver of compositional turnover across both space and time [@habel2016; @ulrich2014]. Heatwaves---periods where daily maximum temperatures exceed the average maximum by more than five degrees [@frich2002]---can greatly impact ecological communities by exposing species to conditions that exceed their thermal tolerances [@kingsolver2017]. This can lead to shifts in dominance [@french2017] and the loss of species that are particularly heat sensitive [@thompson2012]. A key question is, however, what determines how ecological communities respond to heatwaves and recover once the extreme conditions subside?
+
+Metacommunity theory [@loreau2003; @thompson2020], and evidence from a series of experiments [@thompson2012; @symons2013; @limberger2019], suggests that dispersal can play an important role in facilitating community recovery following periods of extreme environmental conditions. Dispersal can allow species to re-establish in habitats in which they have been extirpated, acting to maintain biodiversity and ecosystem functioning [@loreau2003; @thompson2020]. Thus, dispersal promotes species sorting---that is, when species distributions and abundances are matched to the local conditions across space and time [@leibold2004]. Dispersal can also introduce species that are more tolerant to extreme conditions and if these species perform similar roles to the species they replace, they can compensate for their loss [@thompson2012; @symons2013; @limberger2019]. Colonizing species, however, can also greatly alter the composition and functioning of ecosystems, often with profoundly negative impacts, as highlighted by numerous examples of invasive species [@ricciardi2013]. In addition to facilitating colonization, dispersal can also act to homogenize communities across space, a process known as mass effects [@mouquet2003; @leibold2004]. If rates are high enough, dispersal can act to maintain populations in conditions in which they would otherwise not persist, or in which they would otherwise persist at lower abundances [@holt1985]. Likewise, high rates of emigration can reduce population sizes [@holt1985]. Therefore, environmental conditions are expected to have less influence on the composition of communities when dispersal rates are high, due to the homogenizing effects of dispersal [@loreau2003]. The overall expectation in metacommunity theory is that intermediate rates of dispersal should facilitate colonization and potentially community recovery from environmental change via species sorting, and high rates of dispersal should reduce the impact of environmental change on ecological communities through mass effects [@loreau2003; @thompson2020].
+
+Biotic interactions are expected to cause context dependency in how the composition of communities changes with environmental conditions. This is because the abundance and distribution of any given species depends both on environmental conditions as well as on the abundance and distribution of the species with which it interacts [@hutchinson1957]. Competition and predation, for example, may prevent a population from establishing and growing when environmental conditions would otherwise be suitable [@gilman2010; @brown2014]. Thus, biotic interactions are a primary reason why communities that experience the same environmental conditions may differ in composition [@davis1998; @ives2004; @thompson2021]. Biotic interactions are a critical driver in successional dynamics that are common in forest communities [@clements1916]. In freshwater temperate lakes and ponds, seasonal succession in plankton dynamics is driven by an interplay between temperature, competition for nutrients and light, and food web dynamics, such that the composition of the community at any given time is not purely predictable based on density independent abiotic conditions [@sommer2012]. Despite this, most classic metacommunity theory [e.g., @leibold2004; @loreau2003] assumes that competition is equal amongst all individuals and species, which precludes context dependence. More recent theory highlights the importance of biotic interactions, and makes the prediction that biotic interactions should reduce species sorting and lead to non-random patterns of species co-occurrence across space and time that are unrelated to local environmental conditions [@thompson2020]. When communities experience periods of extreme conditions, such as during a heatwave, experimental evidence suggests that biotic interactions may prevent the community from returning to its initial compositional state [@davis1998, @thompson2021].
+
+Here we present the results of a replicated pond zooplankton metacommunity experiment, where we apply a hierarchical joint species modelling framework [@ovaskainen2020] to determine how abiotic responses, dispersal, and biotic interactions combine to shape the response and recovery of the community to a mid-summer heatwave. We test the following three hypotheses: H1 -- If community composition is primarily determined by environmental conditions (here, temperature), then species abundances should vary strongly across spatial and temporal temperature gradients and community composition should be predictable based on temperature at any point in time. H2 -- If intermediate rates of dispersal facilitate species sorting, then species' environmental responses should be strongest when dispersal is present, but not so high as to homogenize communities across space via mass effects and flatten environmental responses. H3 -- If biotic interactions impede species sorting or result in successional dynamics, then community composition should not be predictable based on environmental conditions alone and instead species will show strong negative and positive co-occurrence patterns over space and time.
+
+# Methods
+
+## Experimental design
+
+The experiment consisted of a total of 48--1136L aquatic mesocosms (Rubbermaid Stock Tanks, Rubbermaid USA). Mesocosms were set up in groups of four, each group comprising a single metacommunity, for twelve metacommunities in total. Within each metacommunity, we established a spatial temperature gradient using submersible aquarium heaters (JÄGER TruTsemp, EHEIM GmbH & Co KG, Germany) of different wattages: 100W, 200W, 300W, in addition to a treatment with no heater (i.e., 0W). Thermostats on the heaters were set to their maximum level, 37 \degree C, to ensure that they remained on continuously over the course of the entire experiment, delivering a consistent amount of heat. Mesocosms receiving heaters were placed on 5.08 cm thick rigid panel Styrofoam insulation to increase heat retention. The heaters brought the mesocosms a relatively consistent amount above ambient temperature, resulting in spatial differences in temperature that were maintained as the ambient temperatures fluctuated diurnally and over the course of the 12-week experiment (Figure \@ref(fig:temperature)).
+
+Our experimental treatments resulted in a mean temperature difference of 2.95 \degree C ( $\pm 0.41$ \degree C SD) between the mesocosms without heaters and the mesocosms that received 300 W heaters (Figure \@ref(fig:temperature)). This difference increased over the course of the experiment as evaporation reduced water levels, making the heating treatments more effective. Ambient temperatures were moderate over the first five weeks of the experiment (until mid-July), with an average mean (max) daily temperature in the unheated mesocosms of `r all_temperature %>% filter(time < 6, wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time < 6, wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C; Figure \@ref(fig:temperature)). The warmest period of the experiment occurred from weeks six to eight (late July and early August), which resulted in a averaged mean (max) daily ambient temperatures of `r all_temperature %>% filter(time %in% c(6:8), wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% c(6:8), wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) and `r all_temperature %>% filter(time %in% c(6:8), wattage == 300) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% c(6:8), wattage == 300) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the 300W treatments. Ambient temperatures dropped following this warm period, continuing to decline over the final four weeks of the experiment, so that mean (max) daily temperatures in the unheated mesocosms averaged `r all_temperature %>% filter(time %in% max(time), wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% max(time), wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the final week.
+
+```{r temperature, fig.align="center", fig.height = 3.5*0.9, fig.width = 6*1.3, fig.cap= "Illustration of the experimental treatments. Panel (a) shows a time series of mean daily water temperature over the course of the experiment. The coloured lines represent mean values across all replicate mesocosms with heaters of a given wattage level (n = 4). Thick dashed vertical lines indicate the three sampling dates for zooplankton. Thin dashed vertical lines indicate the dates on which the dispersal treatment was applied. Panel (b) shows an illustration of the four mesocosms that make up a single metacommunity with the arrows showing the reciprocal exchange of water (none, low, or high) that comprised the dispersal treatment.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+disp_df <- data.frame(dispersal = c("none", "low", "high"), disp_label =c("no dispersal (0L)", "low dispersal (1L)", "high dispersal (10L)"))
+disp_image <- image_read("../writing/dispersal_image.png") %>% image_ggplot()
+
+all_temperature <- left_join(disp_df, all_temperature)
+all_temperature$dispersal <- factor(all_temperature$dispersal, levels = c("none", "low", "high"), ordered = TRUE)
+all_temperature$disp_label <- factor(all_temperature$disp_label, c("no dispersal (0L)", "low dispersal (1L)", "high dispersal (10L)"), ordered = TRUE)
+
+
+all_temperature <- all_temperature %>% mutate(temp_diff = factor(wattage, levels = rev(c(0,100,200,300)), ordered = TRUE)) %>% 
+  mutate(temp_diff = fct_recode(temp_diff, "ambient" = "0", "+1°C" = "100", "+2°C" = "200", "+3°C" = "300"))
+
+dispersal_dates <- unique(all_temperature$date[all_temperature$dispersal_date==TRUE])
+dispersal_dates <- dispersal_dates[!is.na(dispersal_dates)]
+zooplankton_dates <- unique(Zoop_data$date)
+
+filter(all_temperature, date < max(zooplankton_dates)) %>% 
+  group_by(wattage, date, temp_diff) %>% 
+  summarise(temp_mean = mean(temp_mean)) %>% 
+  ggplot(aes(x = date, y = temp_mean, color = temp_diff)) + 
+  geom_vline(xintercept = dispersal_dates, color = "grey", lty = 3)+
+  geom_vline(xintercept = zooplankton_dates, color = "black", lty = 2)+
+  geom_line()+
+  scale_color_viridis_d(end = 0.85, option = "B", name = NULL, direction = -1)+
+  ylab("Mean daily temperature °C")+
+  ylim(c(18, 30))+
+  xlab(NULL) + 
+  
+  disp_image + 
+  
+  plot_annotation(tag_levels = "a") + plot_layout()
+```
+
+Dispersal---none, low, or high---was applied within each metacommunity through reciprocal exchange of water and biota. For all dispersal rates, 3 x 10 L of water and biota were collected from each mesocosm using a 3L Van Dorn integrated sampler and placed into 3 - 19 L buckets. For the high dispersal treatment, one of these buckets was poured reciprocally into each of the three other mesocosms within the same metacommunity. For the low dispersal treatment, 1 L of water was poured reciprocally into each of the other mesocosms in the metacommunity and the remaining 27 L were poured back into the source mesocosm to ensure that the total disturbance from the dispersal treatment was constant across dispersal levels. In the no dispersal treatment, all water was poured back into the mesocosm from which it was collected. All equipment used in the dispersal treatments was rinsed with tap water in between each dispersal event to minimize unintentional dispersal. Dispersal treatments were repeated once per week.
+
+The mesocosms were filled with water pumped from an adjacent artificial pond on May 24, 2018. This water contained a natural assemblage of zooplankton, phytoplankton, and bacteria. Heaters were turned on May 25, 2018. All mesocosms received 10 L of sediment collected from Shirley Lake, Malcolm Knapp Research Forest on May 28, 2018. This sediment provided a source of nutrients and associated micro and macrofauna. Mesocosms were then also seeded with zooplankton, phytoplankton, and benthic invertebrates collected from nine waterbodies in the Metro Vancouver Regional District. This resulted in a larger species pool in the experiment than was added by the sediment alone. Zooplankton were collected using a 64 $\mu M$ conical net drawn repeatedly through the water column until a dense population of zooplankton was visible in a 19L bucket of lake water. Benthic invertebrates were collected by kick net and by Eckman grab. Bacteria and phytoplankton were not actively collected but were included in the samples of zooplankton and benthic invertebrates. All source zooplankton were combined in 300 L buckets, and 2 L of this mixture was added to each experimental mesocosm on May 28, 2018. On the same day, all benthic invertebrates were combined in a 100 L bucket and were divided equally by hand and added to the experimental mesocosms. Thus, all mesocosms were seeded with the full species pool and any compositional differences in the final communities can be attributed to treatment effects or stochastic effects. The mesocosms were left for 16 days after being seeded with biota before the dispersal treatment was applied for the first time, to allow the communities to establish and sort according to the temperature gradient. A one-time pulse addition of nutrients (15 $\mu$g P L$^{-1}$, 109 $\mu$g N L$^{-1}$) was added to each mesocosm to boost productivity on June 12, 2018. The experiment started on June 14, 2018, when the dispersal treatment was applied for the first time. The experiment lasted 12 weeks, ending on September 6, 2018.
+
+## Sampling
+
+Samples for estimating zooplankton abundance and composition were collected on week four, eight, and at the end (week 12) of the experiment. Samples were collected by pouring 10 L of mesocosm water through a 64 µM sieve and then preserving zooplankton in 95% EtOH (final concentration $\sim 70$% EtOH). Water was sampled using a Van Dorn integrated sampler, as per the protocol for the dispersal treatments. All sieved water was returned to the source mesocosm. All sampling equipment was rinsed with tap water in between each mesocosm to minimize unintentional dispersal. Zooplankton were identified to the lowest taxonomic resolution possible (usually genus) at 10x magnification under a stereo microscope (Leica M165C) following @hanley2013. Zooplankton samples were split into 4 subsamples using a Folsom Plankton Splitter (Aquatic Research Instruments, USA). Subsamples were counted until a total abundance of 100 individuals of a species were counted, and this number was divided by the proportion of subsamples counted to obtain the full abundance. The remaining subsamples were counted for all species that did not reach this 100 individual threshold. 
+
+## Statistical Analysis
+All analyses were conducted in R version `r R.Version()$major`.`r R.Version()$minor` [@rcoreteam2022]. We assessed whether the experimental treatments (i.e., dispersal, temperature, and their interactions) resulted in significant differences in the composition of the zooplankton communities using PERMANOVA based on Bray-Curtis dissimilarities using the vegan package [@oksanen2011]. To assess whether the influence of the treatments varied through time, we also included an interactive effect of sampling week in the model. To account for the non-independence of the mesocosms across time and the non-independence of mesocosms within metacommunities, we included mesocosm and metacommunity identities as nested strata. Then, to determine post-hoc how the treatment effects differed by week, we ran PERMANOVA separately on data from each sampling week, with metacommunity as a strata. If temperature is the primary determinant of composition (H1), we expected to see significant temperature effects on composition across all sampling weeks. If dispersal either facilitates species sorting or homogenizes the metacommunity (H2), we expected to see a significant interaction between temperature and dispersal on community composition. If biotic interactions impede species sorting or result in successional dynamics (H3), we expect to see the influence of temperature on composition depend on time. We visualized compositional differences across treatments and time using non-metric multidimensional scaling (NMDS) based on Bray-Curtis dissimilarity and relative abundance data.
+
+We then used the Hierarchical Modelling of Species Communities (HMSC) package [@tikhonov2021] to estimate the taxon specific responses to our experimental treatments that resulted in the compositional differences that we identified using PERMANOVA. HMSC is a Bayesian generalized mixed effects model that allowed us to estimate the responses of the individual species, based on changes in abundance, to our fixed effects---temperature, dispersal, and time (sampling week)---while accounting for mesocosm (repeated sampling through time) and metacommunity (mesocosms joined by dispersal) as random effects [@ovaskainen2020]. We modelled the zooplankton community as count data using a Poisson distribution and a log-link function.
+
+We estimated the temperature--abundance relationships of the species as quadratic functions, as we assume that each species has a density independent response to temperature such that their abundances peak at intermediate temperatures. For this, the abundance of each species' was linked to the water temperature of the mesocosm from which it was sampled, using the average temperature from the week preceding the day of sampling. Thus, the temperature associated with each mesocosm differed across the three sampling dates, depending on both the ambient temperature and the wattage of the heater present (the experimental heat treatment). If temperature is the primary determinant of community composition (H1), we expect to see significant temperature responses that vary between species that lead to predictable turnover in community composition across the spatial temperature gradient between mesocosms as well as through time within the individual mesocosms.  
+
+We fit dispersal as an ordered factor (none, low, high) and we allowed this to interact with temperature. Therefore, our model estimated the degree to which dispersal altered the temperature responses of the species. If intermediate rates of dispersal facilitate species sorting but high dispersal rates homogenize metacommunities (H2), then we expect that the temperature responses should be strongest (i.e., steepest temperature-abundance response curves) in the low dispersal rate metacommunities, and weakest (i.e., flattest temperature-abundance response curves) in the high dispersal rate metacommunities.
+
+Because our experimental design allowed us to control for environmental differences other than those due to temperature, we assume that additional variation in species abundances that is not associated with our fixed effects for temperature and dispersal is likely due to biotic interactions (but see discussion for caveats). We quantified this additional variation in three ways. First, we included time (sampling week) as a linear fixed effect in our model to account for temporal changes in species' abundances that were not associated with temperature of dispersal. We elected not to include time as a quadratic effect because the temperature was the highest in the middle of the three sampling weeks and so temperature and time would have been confounded in our model. Thus, we assumed that species' abundances that peaked or dipped in the middle sampling week compared to the first and last sample weeks were associated with temperature. Second, mesocosm identity was included as a random effect, allowing us to estimate whether species showed non-random patterns of co-occurrence within individual mesocosms that were not associated with temperature or dispersal. This random effect also allowed us to account for the non-independence of the communities across the three time points. Finally, metacommunity identity was also included as a random effect, allowing us to estimate whether species showed non-random spatial patterns of co-occurrence at the metacommunity scale that were not associated with temperature or dispersal. The metacommunity random effect also allowed us to account for the non-independence of the four mesocosms within each metacommunity that were connected by the dispersal treatment. Thus, if biotic interactions impede species sorting or result in successional dynamics (H3) then we expect to see significant time-abundance relationships and non-random species co-occurrence patterns at either the mesocosm or metacommunity scale. 
+
+We fit the HMSC model assuming the default prior distributions, which are weakly informative to help the model converge on reasonable parameter estimates [see Chapter 8 in @ovaskainen2020]. We sampled the posterior distributions using four Markov Chain Monte Carlo (MCMC) chains, with an initial burn in of 12500 samples, after which we retained every 1000$^{th}$ sample for a total of 250 samples from each chain (1000 across all chains). Convergence was assessed by visually examining the chains and calculating the split potential scale reduction factor $\hat{R}$ [@standevelopmentteam2020]. 
+
+We assessed the influence of our fixed and random effects using the variance partitioning method within the HMSC package [@tikhonov2021]. Because this method does not account for covariance between explanatory variables [@ovaskainen2020] it cannot properly distinguish the variance explained by temperature and dispersal from that which is explained by their interaction. Thus, we grouped temperature, dispersal, and their interaction together and estimated how much variance they explained in combination. We assessed the influence of our fixed effects on individual species based on whether they showed a positive or negative response. Significance was assessed based on whether or not the 95% credible interval overlapped zero. We also used the fitted model to estimate how species abundances should vary across a temperature range observed in the sampling weeks (19--29 \degree C), and how these response curves vary depending on the three levels of the dispersal treatment. We assessed whether species showed positive or negative co-occurrence patterns, after accounting for the fixed effects. Again we assessed significance based on whether or not the 95% credible interval overlapped zero.
+
+# Results
+The community consisted of `r ncol(m$Y)` zooplankton taxa. The mean abundance per mesocosm across the three sampling weeks ranged from `r round(min(colMeans(m$Y))/10, 2)` individuals L$^{-1}$ for Ostracoda to `r round(max(colMeans(m$Y))/10, 1)` individuals L$^{-1}$ for Diaphanosoma, with a median value of `r round(median(colMeans(m$Y))/10, 1)` individuals L$^{-1}$ across all taxa. 
+
+The temperature treatment resulted in compositional differences, but counter to H1 and consistent with H3, these differences were not constant across all sampling weeks (temperature x time; $F_{1,143}$ = `r round(perman$F[5],2)`, p = `r perman[[5]][5]`). Our post-hoc PERMANOVA indicated that temperature had significant effects on composition in week four (i.e, prior to the heatwave; $F_{1,47}$ = `r round(perman4$F[1],2)`, p = `r perman4[[5]][1]`), but not in week 8 (i.e., during the heatwave; $F_{1,47}$ = `r round(perman8$F[1],2)`, p = `r perman8[[5]][1]`) or 12 (i.e., after the heatwave; $F_{1,47}$ = `r round(perman12$F[1],2)`, p = `r perman12[[5]][1]`). This can be seen in the NMDS plots (Figure \@ref(fig:nmds)a), where the communities were clearly structured across the temperature treatment gradient in week 4. Daphnia were more abundant in the low temperature mesocosms and Diaphanosoma were more abundant in the high temperature mesocosms. However, the heatwave caused the communities to converge on the same compositional state regardless of temperature by week 8. The communities diverged in composition following the heatwave (i.e., week 12), but these communities were no longer differentiated based on temperature as they were in week 4. 
+
+```{r nmds, fig.align="center", fig.height = 8*0.7, fig.width = 8, fig.cap= "Non-metric multidimensional scaling (NMDS) ordination plots showing compositional difference between the mesocosms (points) on the three sampling dates (subpanels). Panels (a) and (b) show the same compositional information, but panel (a) shows points (mesocosms) coloured based on the wattage of the heater used for their temperature treatment and panel (b) shows points coloured by their dispersal treatment. The composition of the mesocosms is shown as the proximity between the points and the taxa labels, with closer proximity indicating higher abundance of that taxa. This NMDS ordination has a stress value of 0.14. The polygons show the outer convex hull for each treatment group.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+Z.nmds <- metaMDS(decostand(Y, method = "hellinger"), distance = "euclidean")
+
+NMDS.df <- XData
+week_df <- data.frame(week = c(4, 8, 12), week_label = factor(c("week 4", "week 8 (heatwave)", "week 12"),  levels = c("week 4", "week 8 (heatwave)", "week 12"), ordered = TRUE))
+NMDS.df <- left_join(NMDS.df, week_df)
+NMDS.df <- cbind(NMDS.df, scores(Z.nmds)$sites)
+
+species.scores <- data.frame(scores(Z.nmds, display = "species"))
+species.scores$species <- str_to_title(rownames(species.scores))
+
+temp_hulls <- NMDS.df %>% 
+  group_by(week_label, watts, week) %>% 
+  summarise(hull = chull(NMDS1, NMDS2)) %>% 
+  left_join(NMDS.df %>% 
+  group_by(week_label, watts, week) %>% 
+  arrange(week, watts) %>% 
+  mutate(hull = 1:n()) %>% 
+    select(hull, week, watts, NMDS1, NMDS2))
+
+disp_hulls <- NMDS.df %>% 
+  group_by(week_label, dispersal, week) %>% 
+  summarise(hull = chull(NMDS1, NMDS2)) %>% 
+  left_join(NMDS.df %>% 
+              group_by(week_label, dispersal, week) %>% 
+              arrange(week, dispersal) %>% 
+              mutate(hull = 1:n()) %>% 
+              select(hull, week, dispersal, NMDS1, NMDS2))
+
+NMDS1 <- ggplot(NMDS.df, aes(x = NMDS1, y = NMDS2, color = factor(watts)))+
+  geom_polygon(data = temp_hulls, aes(fill = factor(watts)), alpha = 0.2, color = NA)+
+  facet_wrap(~week_label)+
+  geom_point()+
+  geom_text(data = species.scores, aes(label =species, color = NULL), size = 2.5)+
+  coord_equal(xlim = c(-1,0.6))+
+  scale_color_viridis_d(option = "B", end = 0.85, name = "watts")+
+  scale_fill_viridis_d(option = "B", end = 0.85, name = "watts")
+
+NMDS2 <- ggplot(NMDS.df, aes(x = NMDS1, y = NMDS2, color = dispersal))+
+  geom_polygon(data = disp_hulls, aes(fill = factor(dispersal)), alpha = 0.2, color = NA)+
+  geom_point()+    
+  geom_text(data = species.scores, aes(label =species, color = NULL), size = 2.5)+
+  facet_wrap(~week_label)+
+  coord_equal(xlim = c(-1,0.6))+
+  theme(strip.background = element_rect(colour=NA, fill=NA))+
+  scale_color_viridis_d(end = 0.85, name = "dispersal")+
+  scale_fill_viridis_d(end = 0.85, name = "dispersal")
+  
+
+NMDS1 / NMDS2 +  plot_annotation(tag_levels = "a")
+```
+
+Consistent with H2, the dispersal treatments altered the influence of temperature on composition ($F_{2,47}$ = `r round(perman$F[4],2)`, p = `r perman[[5]][4]`), and the effect of dispersal nor its interaction with temperature did not depend on time (dispersal x week, $F_{2,47}$ = `r round(perman$F[6],2)`, p = `r perman[[5]][6]`; dispersal x temperature x week, $F_{2,47}$ = `r round(perman$F[7],2)`, p = `r perman[[5]][7]`). This interactive effect of dispersal and temperature can be seen in the NMDS plots where the composition of mesocosms with dispersal tended to be more similar to the warmer mesocosms (Figure \@ref(fig:nmds)b), having a higher abundance of Diaphanosoma and lower abundance of taxa that were more common in cooler mesocosms. 
+
+The accuracy of the HMSC model in predicting the species' abundances ranged from an R$^2$ of `r signif(min(MF$SR2), dig = 2)` for Chironomidae to `r signif(max(MF$SR2), dig = 2)` for Diaphanosoma, with a median value of `r signif(median(MF$SR2), dig = 2)`, across all taxa (Figure \@ref(fig:HMSCfig)a). Of this explained variation, an average of `r VP.df %>% group_by(effect) %>% summarise(variance = mean(variance)) %>% filter(effect == "temp * dispersal") %>% pull(variance) %>% round(3) *100`% was explained by the interaction between temperature and dispersal, `r VP.df %>% group_by(effect) %>% summarise(variance = mean(variance)) %>% filter(effect == "time") %>% pull(variance) %>% round(3) *100`% was explained by time, `r VP.df %>% group_by(effect) %>% summarise(variance = mean(variance)) %>% filter(effect == "mesocosm") %>% pull(variance) %>% round(3) *100`% was explained by mesocosm identity, and `r VP.df %>% group_by(effect) %>% summarise(variance = mean(variance)) %>% filter(effect == "metacommunity") %>% pull(variance) %>% round(3) *100`% was explained by metacommunity identity (Figure \@ref(fig:HMSCfig)a). Convergence of the HMSC model was acceptable with a mean scale reduction factor $\hat{R}$ of `r round(mean(converge.df$ge),3)` and with `r round(sum(converge.df$ge<1.1)/nrow(converge.df)*100)`% of parameters having values below 1.1.
+
+```{r HMSCfig, fig.align="center", fig.height = 10, fig.width = 14, fig.cap= "Panel (a) shows how the variation explained for each taxon is partitioned across the various fixed and random effects. The bar length shows the total R$^2$ for each taxon, and each segment corresponds to the proportion of that variation that is explained by each of fixed and random effects. Because our model includes and interaction between temperature and dispersal we cannot separate their variance explained and so they are grouped together.  Panel (b) shows the estimated model co-efficients with the point showing the estimated value, the thick bars showing the 50\\% credible interval, and the thin lines showing the 95\\% credible interval. Points and bars are shown as grey when the 95\\% credible interval overlaps 0 and red (positive) or blue (negative) when they do not. Panels (c) and (d) show the pairwise taxa co-occurrence patterns at the mesocosm (c) and metacommunity (d) scales. When pairwise co-occurrences are shown as red (positive) or blue (negative) when they are estimated to differ from zero with at least a 95\\% probability.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+VP.df$species <- str_to_title(VP.df$species)
+
+p1 <- ggplot(VP.df,aes(y = variance*R2, x = species, fill = effect))+
+  geom_hline(yintercept = c(0.25,0.5, 0.75), linetype = 2)+
+  geom_bar(stat = "identity", color = 1)+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  #scale_fill_manual(values = c("#BE3333", "maroon", viridis(4)), name = "", breaks = rev(levels(VP.df$effect)))+
+  scale_fill_manual(values = rev(c("#BE3333", "#e75480","#440154", "#4B82A9")), name = "", breaks = rev(levels(VP.df$effect)))+
+  scale_size_continuous(breaks = c(0.1,0.25,0.5,0.75,1))+
+  xlab(label = "")+
+  scale_x_discrete(limits = rev(sort(unique(VP.df$species))))+
+  scale_y_continuous(limits = c(0, 1), expand = c(0,0))+
+  ylab(expression(paste("Variation explained (", R^2, ")", sep = "")))+
+  theme(legend.position = "bottom")+
+  coord_flip()+
+  guides(fill=guide_legend(nrow=1, byrow=TRUE))+
+  ggtitle("Variation partitioning")
+
+postBeta <- getPostEstimate(m, parName = "Beta", q = c(0.05, 0.25, 0.5, 0.75, 0.95))
+
+beta.df <- data.frame(beta = c(postBeta$q), q = c(5, 10, 50, 90, 95), species = str_to_title(rep(colnames(m$Y), each = 5*10)), 
+                      coef = factor(rep(c("intercept", "temp", "temp^2","low dispersal", "high dispersal", "time", "temp * low dispersal", "temp^2 * low dispersal", "temp * high dispersal", "temp^2 * high dispersal"), each = 5),
+                                    levels = c("intercept", "temp", "temp^2","low dispersal", "high dispersal", "time", "temp * low dispersal", "temp^2 * low dispersal", "temp * high dispersal", "temp^2 * high dispersal"), 
+                                    ordered = TRUE))
+
+beta.df<- beta.df %>% 
+  spread(key = q, value = beta) %>% 
+  mutate(sign = sign(`50`)) %>% 
+  mutate(sig95 = ifelse(sign(`95`) == sign(`5`), TRUE, FALSE)) %>% 
+  mutate(sig90 = ifelse(sign(`90`) == sign(`10`), TRUE, FALSE)) %>% 
+  mutate(sig = ifelse(`sig95` == TRUE & sign == -1, "neg95",
+                      ifelse(`sig95` == TRUE & sign == 1, "pos95", "zero"))) %>% 
+  mutate(sig = factor(sig, levels = c("pos95", "zero", "neg95"), ordered = TRUE))
+
+p2 <- ggplot(beta.df %>% filter(coef != "intercept"), aes(y = `50`, x = species, color = sig))+
+  geom_hline(yintercept = 0, linetype = 2)+
+  geom_errorbar(aes(ymin = `5`, ymax = `95`), width = 0, size = 0.5)+
+  geom_errorbar(aes(ymin = `10`, ymax = `90`), width = 0, size = 1.5)+
+  geom_point(size = 1.5)+
+  facet_grid(.~coef, scales = "free", labeller = label_wrap_gen(width=10))+
+  scale_x_discrete(limits = rev(sort(unique(VP.df$species))))+
+  coord_flip()+
+  theme_classic()+
+  scale_color_manual(values = c("#ca0020", "grey30", "#0571b0"), guide = "none")+
+  ylab("Coefficient")+
+  xlab("")+
+  theme(axis.text.x = element_text(angle = 90, size = 8), strip.text.x = element_text(size = 10), strip.background = element_blank())+
+  ggtitle("Fixed effects coefficients")
+
+#species associations
+OmegaCor = computeAssociations(m)
+means1 <- OmegaCor[[1]]$mean
+support1 <- OmegaCor[[1]]$support
+means2 <- OmegaCor[[2]]$mean
+support2 <- OmegaCor[[2]]$support
+
+meso_omega <- as.data.frame(means1) %>% 
+  gather(key = species, value = mean) %>% 
+  mutate(species2 = rep(colnames(m$Y),length(colnames(m$Y)))) %>% 
+  mutate(level = "Tank") %>% 
+  mutate(support = c(support1)) %>% 
+  ungroup() %>%
+  rowwise() %>% 
+  mutate(pair = paste(sort(c(species, species2)), collapse = ",")) %>% 
+  arrange(pair, species) %>% 
+  group_by(pair) %>%
+  filter(row_number()==1) %>% 
+  filter(species != species2) %>% 
+  mutate(species = str_to_title(species), species2 = str_to_title(species2))
+
+meso_omega_select <- filter(meso_omega) %>% 
+  mutate(support_bin = ifelse(support<=0.05, "neg. 95%", 
+                              ifelse(support <= 0.15 & support > 0.05, "neg. 85%", 
+                                     ifelse(support<= 0.25 & support > 0.15, "neg. 75%", 
+                                            ifelse(support >= 0.75 & support < 0.85, "pos. 75%", 
+                                                   ifelse(support >= 0.85 & support < 0.95, "pos. 85%", 
+                                                          ifelse(support >= 0.95, "pos. 95%", "no association"))))))) %>% 
+  mutate(support_bin = factor(support_bin, levels = c("neg. 95%", "neg. 85%", "neg. 75%", "no association","pos. 75%", "pos. 85%", "pos. 95%"), ordered = TRUE))
+
+meso_omega_select <- filter(meso_omega) %>% 
+  mutate(support_bin = ifelse(support<=0.05, "neg. 95%", ifelse(support >= 0.95, "pos. 95%", "no association"))) %>% 
+  mutate(support_bin = factor(support_bin, levels = c("neg. 95%", "no association", "pos. 95%"), ordered = TRUE))
+
+meso_omega_p <- meso_omega_select %>% 
+  ggplot(aes(x = species, y = species2, fill = support_bin))+
+  geom_tile()+
+  scale_fill_manual(values = c("#ca0020", "grey90", "#0571b0"), name = "", drop = FALSE, breaks = rev(c(levels(meso_omega_select$support_bin)))) +
+  scale_y_discrete(limits = rev(sort(c(str_to_title(colnames(m$Y))))[-1]))+
+  scale_x_discrete(limits = sort(c(str_to_title(colnames(m$Y))))[-10])+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab("")+
+  ylab("")+
+  coord_equal()+
+  ggtitle("Mesocosm\ntaxon associations")
+
+meta_omega <- as.data.frame(means2) %>% 
+  gather(key = species, value = mean) %>% 
+  mutate(species2 = rep(colnames(m$Y),length(colnames(m$Y)))) %>% 
+  mutate(level = "Tank") %>% 
+  mutate(support = c(support2)) %>% 
+  ungroup() %>%
+  rowwise() %>% 
+  mutate(pair = paste(sort(c(species, species2)), collapse = ",")) %>% 
+  arrange(pair, species) %>% 
+  group_by(pair) %>%
+  filter(row_number()==1) %>% 
+  filter(species != species2)%>% 
+  filter(species != species2) %>% 
+  mutate(species = str_to_title(species), species2 = str_to_title(species2))
+
+meta_omega <- meta_omega %>% 
+  mutate(support_bin = ifelse(support<=0.05, "neg. 95%", ifelse(support >= 0.95, "pos. 95%", "no association"))) %>% 
+  mutate(support_bin = factor(support_bin, levels = c("neg. 95%", "no association", "pos. 95%"), ordered = TRUE))
+
+meta_omega_p <- ggplot(meta_omega, aes(x = species, y = species2, fill = support_bin))+
+  geom_tile()+
+  scale_fill_manual(values = c("#ca0020", "grey90", "#0571b0"), name = "", drop = FALSE, breaks = rev(c(levels(meso_omega_select$support_bin))), guide = "none") +
+  scale_y_discrete(limits = rev(sort(c(str_to_title(colnames(m$Y))))[-1]))+
+  scale_x_discrete(limits = sort(c(str_to_title(colnames(m$Y))))[-10])+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  xlab("")+
+  ylab("")+
+  coord_equal()+
+  ggtitle("Metacommunity\ntaxon associations")
+
+((p1 / p2) | (meso_omega_p / meta_omega_p)) + plot_layout(widths = c(1.6,1)) + plot_annotation(tag_levels = "a")
+```
+
+As predicted, based on H1, all species showed strong and varied temperature--abundance relationships as is necessary for temperature driven species sorting (Figure \@ref(fig:tempcurves)). The taxa differed in the range of temperatures where they were most abundant (Figure \@ref(fig:tempcurves)) as indicated by the varied varied linear temperature coefficients (Figure \@ref(fig:HMSCfig)b).  Daphnia and Calanoida had the coldest optima at 22.5 and 24.5 \degree C respectively and Chaoborus, Cyclopoida, and Diaphanosoma had the warmest optima, which were all above 30 \degree C. In addition, all taxa were estimated to have unimodal temperature--abundance relationships (Figure \@ref(fig:tempcurves)) as indicated by the negative quadratic temperature coefficients (Figure \@ref(fig:HMSCfig)b). These negative quadratic responses were all significant with the exception of Cyclopoida. However, while community composition varied predictably across the spatial temperature gradients within the mesocosms prior to the heatwave (supporting H1), there was no clear signal of temperature on community composition after the heatwave (counter to H1; Figure \@ref(fig:nmds)a).
+
+```{r tempcurves, fig.align="center", fig.height = 5, fig.width = 10, fig.cap= "Marginal temperature response curves for the zooplankton taxa estimated by the HMSC model. Panel (a) shows estimated changes in abundance over the temperature range experienced in the experiment. Panel (b) shows these curves normalized between 0 and 1 to facilitate comparison of temperature optima. Lines represent estimated responses, the bands in panel a show the 50\\% credible interval. Colors are ordered from blue (cold) to red (warm) in order of estimated temperature optima. Marginal predictions were made by predicting values using week 4 as the time period, and for the no dispersal treatment.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+newXData <- data.frame(temp = seq(18, 30, length = 100), 
+                       dispersal = rep(c("none","low","high"),each = 100), 
+                       week = rep(unique(XData$week), each = 100*3)) %>% 
+  mutate(temp_stnd = (temp - mean(XData$temp))/sd(XData$temp),
+         week_stnd = (week - mean(XData$week))/sd(XData$week))
+
+gradient <- prepareGradient(hM = m, XDataNew = newXData)
+
+predY <- predict(m, XData = gradient$XDataNew, studyDesign = gradient$studyDesignNew, ranLevels = gradient$rLNew, expected = TRUE)
+
+tmp = abind(predY, along = 3)
+qpred = apply(tmp, c(1, 2), median, na.rm = TRUE)
+predictions <- bind_cols(data.frame(qpred), newXData)
+
+qpred = apply(tmp, c(1, 2), quantile, prob = 0.25, na.rm = TRUE)
+predictions_low <- bind_cols(data.frame(qpred), newXData)
+
+qpred = apply(tmp, c(1, 2), quantile, prob = 0.75, na.rm = TRUE)
+predictions_high <- bind_cols(data.frame(qpred), newXData)
+
+qpred = apply(tmp, c(1, 2), mean, na.rm = TRUE)
+predictions_mean <- bind_cols(data.frame(qpred), newXData)
+
+predictions_abund <- predictions %>% 
+  gather(key = species, value = N, diaphanosoma:ostracoda)
+predictions_abund_mean <- predictions_mean %>% 
+  gather(key = species, value = N_mean, diaphanosoma:ostracoda)
+predictions_abund_low <- predictions_low %>% 
+  gather(key = species, value = N_low, diaphanosoma:ostracoda)
+predictions_abund_high <- predictions_high %>% 
+  gather(key = species, value = N_high, diaphanosoma:ostracoda)
+
+predictions_abund <- left_join(left_join(left_join(predictions_abund, predictions_abund_low), predictions_abund_high), predictions_abund_mean)
+
+predictions_abund$species <- factor(str_to_title(predictions_abund$species), levels = str_to_title(colnames(Y))[order(colSums(Y),decreasing = T)], ordered = TRUE)
+predictions_abund$dispersal <- factor(predictions_abund$dispersal, levels = c("none", "low", "high"), ordered = TRUE)
+
+filter(predictions_abund, week == 4, dispersal == "none") %>% 
+    group_by(species) %>% 
+    mutate(max_temp = temp[N == max(N)]) %>%
+    filter(temp<=30, temp >=18) %>% 
+    ggplot(aes(x = temp, y = N/10, group = species, color = fct_reorder(species, max_temp, .desc = TRUE), fill = fct_reorder(species, max_temp, .desc = TRUE)))+
+    geom_ribbon(aes(ymin = N_low/10, ymax = N_high/10), alpha = 0.5, col = NA)+
+    geom_line(size = 1)+
+    ylab(expression(paste("Predicted abundance (Ind. ",L^{-1},")", sep = "")))+
+    #scale_color_manual(values = c(brewer.pal(n = 6, name = "Greys")[3:6],rev(viridis(n = 6, option = "B", begin = 0.2, end = 0.8))), name = "")+
+    #scale_fill_manual(values = c(NA,NA,NA,NA,rev(viridis(n = 6, option = "B", begin  = 0.2, end = 0.8))), guide = "none")+
+    #scale_color_manual(values = c(brewer.pal(n = 4, name = "Greys")[3:4],brewer.pal(n = 8, name = "RdYlBu")), name = "")+
+    #scale_fill_manual(values = c(NA,NA,brewer.pal(n = 8, name = "RdYlBu")), guide = "none")+
+    scale_color_brewer(palette = "RdYlBu", name = "")+
+    scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
+    theme_classic()+
+    xlab("Mean weekly temperature °C")+
+    theme(legend.justification=c(0,1), legend.position=c(0,1.05),
+          legend.background = element_rect(fill=NA))+
+    coord_cartesian(ylim = c(1,120))+
+    scale_y_sqrt(breaks = round(seq(sqrt(1),sqrt(120), length = 6)^2, digits = -1))+
+
+  filter(predictions_abund, week == 4, dispersal == "none") %>% 
+    group_by(species) %>% 
+    mutate(max_temp = temp[N == max(N)]) %>%
+    filter(temp<=30, temp >=18) %>% 
+    mutate(N_norm = N_mean/max(N_mean)) %>%
+    ggplot(aes(x = temp, y = N_norm, group = species, color = fct_reorder(species, max_temp, .desc = TRUE)))+
+    #geom_ribbon(aes(ymin = N_low, ymax = N_high), alpha = 0.2, col = NA)+
+    geom_line(size = 1)+
+    ylab("Normalized predicted abundance")+
+    scale_color_brewer(palette = "RdYlBu", name = "", guide = "none")+
+    scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
+    theme_classic()+
+    xlab("Mean weekly temperature °C") + plot_annotation(tag_levels = "a")
+```
+
+As expected under H2, dispersal did alter the realized effects of temperature on population abundance. The most common effect was that dispersal weakened the temperature--abundance relationships, as indicated by the positive dispersal by temperature$^2$ coefficients (Figure \@ref(fig:HMSCfig)b, Figure \@ref(fig:zoopgrid)). Contrary to H2, where we expected this to occur under high but not low dispersal, this weakening of the temperature--abundance relationships was equally common under both low and high dispersal, with five taxa showing significant effects in each dispersal rate. The less common effect of dispersal, exhibited by only two taxa under each dispersal rate, was a strengthening of the temperature-abundance relationship (i.e, negative dispersal by temperature$^2$ coefficients; Figure \@ref(fig:HMSCfig)b). Dispersal had more variable effects on the linear temperature responses, with both positive and negative dispersal temperature interactions being common at both dispersal rate (Figure \@ref(fig:HMSCfig)b). This indicates that dispersal was altering the temperatures at which abundances were highest, but not in a consistent way. Dispersal had limited direct effects on the taxon abundances. The exceptions were Scapholeberis and Chironomidae which decreased and increased in abundance under low dispersal respectively (Figure \@ref(fig:HMSCfig)b).
+
+Consistent with H3, many species showed significant time-abundance relationships and some also showed non-random co-occurrence patterns. Independent of the effects of temperature and dispersal, four taxa (Simocephalus, Daphnia, Chaoborus, Calanoida) were estimated to have decreased in abundance over time and the remaining six taxa were estimated to have increased in abundance over time (Figure \@ref(fig:HMSCfig)b). A few taxa showed strong positive or negative associations within tanks or metacommunities that were not associated with temperature, dispersal, or time. Within mesocosms, Cyclopoda were positively associated with Chironomidae and Simocephalus was negatively associated with Chironomidae and Cyclopoida (Figure \@ref(fig:HMSCfig)c). Within metacommunities, Diaphanosoma was negatively associated with Ostracoda, while Acari was positively associated with Cyclopoida and negatively associated with Scapholeberis (Figure \@ref(fig:HMSCfig)d).
+
+The influence of biotic interactions can be seen in the NMDS plots by comparing the composition of the post- and pre-heatwave communities (Figure \@ref(fig:nmds)). The post-heatwave communities tended to be comprised of taxa such as Scapholeberis, Cyclopoda, Acari, Ostracoda, Chrimonidae, and Diaphanosoma that could tolerate high temperatures (Figure \@ref(fig:tempcurves)), although these communities were not as clearly structured by their temperature treatments as they were in week four, prior to the heatwave (Figure \@ref(fig:nmds)). Although temperatures were similar leading up to weeks 4 and 12, the composition of the communities differed considerably between the two time periods. Our analysis suggests that this was, at least in part, due to temporal changes in abundance that were independent of temperature and dispersal. This loss of temperature structure following the heatwave, and the temporal changes in species abundance were not associated with temperature are counter to H1 and are consistent with H3. In addition, the non-random taxon co-occurrence patterns are evident in the post-heatwave communities which showed high compositional variability that was not associated with the temperature treatments, further supporting H3. Still, the influence of dispersal was evident in the week 12 communities. The composition of the no dispersal mesocosms was the most variable, the composition of mesocosms with low dispersal tended to remain dominated by Diaphanosoma, while the composition of the high dispersal treatments tended to have higher abundance of Scapholeberis, Ostracoda, Acari, and Cyclopoid but lower abundance of Calanoida and Daphnia.
+
+# Discussion
+Our analysis suggests that the temperature tolerances of taxa, dispersal, and biotic interactions jointly determined how the zooplankton metacommunities responded to and recovered from the heatwave. We found strong evidence that taxa differed in their temperature preferences, which resulted in spatial turnover in community composition across the temperature gradient within the metacommunities prior to the heatwave. These temperature responses also led to a predictable response of the community to the heatwave, whereby the communities tended to be dominated by a single heat tolerant taxa, Diaphanosoma. However, counter to expectations based on the species sorting paradigm [H1\; @leibold2004] the post-heatwave communities were not predictably structured based on the temperature preferences of taxa as they were prior to the heatwave, despite the fact that the temperature gradients within the metacommunities were maintained throughout the experiment. These post-heatwave communities tended to consist of taxa that could tolerate high temperatures, but the composition across replicate mesocosms was highly variable. We suggest that this variation is likely driven by interactions between taxa [following H3\; @davis1998; @thompson2020], which maintained and amplified compositional differences between communities, preventing the reestablishment of the temperature-based structure that characterized the metacommunities prior to the heatwave. In addition, counter to the spatial insurance hypothesis [H2\;@loreau2003; @gonzalez2009], low rates of dispersal did not facilitate species sorting. Instead, all rates of dispersal acted to reduce the degree to which temperature structured the metacommunities, resulting in an overall homogenization across space. These results highlight that the response of metacommunities to environmental perturbations is likely more complex than is predicted by classic metacommunity theory, which emphasizes the role of environmental responses and dispersal [e.g., @loreau2003; @leibold2004; @mouquet2003; @gravel2006], but generally does not account for non-equal interactions between taxa.
+
+The strong temperature responses observed in our experiment are consistent with the general expectation that temperature changes resulting from climate change should result in shifting species ranges and the reorganizaut tion of ecological communities [@woodward2010; @lenoir2015; @bartley2019]. In our case, interspecific variation in temperature responses led to spatial turnover in community composition with the metacommunities and determined how the community responded to the heatwave. Aligning with the temperature-size rule [@atkinson1995] as well as estimates from previous studies [@moore1996; @thompson2012], our HMSC model estimated that larger bodied taxa such as Daphnia and calanoid copepods are favoured under cooler conditions, while smaller taxa such as Diaphanosoma, cyclopoid copepods, Acari, and Scapholeberis are favoured under warmer conditions. However, despite these strong and somewhat predictable taxon level responses to temperature, our analysis suggests that temperature responses can only partially explain the overall dynamics and composition of the metacommunities during and after the heatwave. 
+
+We found evidence that dispersal altered population abundances and rates of spatial community turnover within the metacommunities. As predicted by theory (H2), high dispersal rates generally resulted in weaker temperature--abundance relationships and less spatial compositional turnover within the metacommunities [@loreau2003; @mouquet2003; @holt1985]. However, contrary to the spatial insurance hypothesis [H2\; @loreau2003; @gonzalez2009], we did not find evidence that dispersal facilitated species sorting, nor the recovery of populations following the heatwave. This contrasts with results from previous experiments that found evidence that dispersal could buffer communities against environmental change, including warming, by introducing stress tolerant taxa [@thompson2012; @symons2013; @limberger2019]. In all of these cases, however, dispersal was from an external regional species pool rather than between patches within experimental metacommunities. In our experiment, the heatwave homogenized the metacommunities, precluding the potential for species sorting and dispersal facilitated rescue once conditions cooled. This aligns with observations from an experiment that found that warming synchronized metacommunities, thus eroding the potential for dispersal to provide stability [@thompson2015]. Our results suggest that expectations based on  theory and experiments may be overestimating the role that dispersal can play in facilitating species sorting within metacommunities. In reality, non-equal biotic interactions, which are missing from classic theoretical models [@loreau2003; @gonzalez2009], and regional homogenization by environmental perturbations, which are missing from experiments that only include dispersal from an external regional species pool [@thompson2012; @symons2013; @limberger2019], both have the potential to erode the ability for dispersal to facilitate species sorting. 
+
+Evidence that biotic interactions were an important determinant of the dynamics of the metacommunities, particularly following the heatwave, comes from two sources. First, several taxa exhibited negative or positive co-occurrence patterns that were not associated with our experimental treatments. This is consistent with the high compositional variation between mesocosms that was present in week 12, following the heatwave, which were not associated with the temperature treatments. It is possible that these co-occurrence patterns were the result of environmental variation that was not accounted for in the model [@blanchet2020], however non-treatment differences were minimized in our experiment and so it seems likely that these post-heatwave compositional differences were due to biotic interactions. The second source of evidence of the importance of biotic interactions is the temporal trends in taxon abundance that were not associated with the experimental treatments. This temporal turnover in the communities is consistent with successional dynamics that are well documented in plankton communities [@sommer2012]. Our experimental design does not allow as to determine the degree to which these temporal dynamics were due to interactions between organisms that were present in the water column, or due to the emergence of zooplankton from resting stages in the sediment [@wisnoski2022]. Furthermore, we cannot rule out the potential that some of these temporal dynamics may have been driven by other abiotic changes in the environment (e.g. changes in daylight). Nevertheless, regardless of the mechanism, the post-heatwave communities did not return to their pre-heatwave composition even though the taxa that were initially abundant were still present and should have been favoured by the cooler conditions. This suggests that some form of density-dependent biotic interactions were likely at play. 
+
+Our findings highlight the fact that biotic interactions are a critical component in determining how metacommunities, and communities in general respond to environmental change. This in itself should not be surprising given the central role that species play in our understanding of community ecology [@clements1916; @lotka1922; @volterra1926; @hutchinson1957]. Indeed, theory [@ives2004; @thompson2017] and experimental evidence [@davis1998; @brown2014; @alexander2015; @thompson2021] suggest that biotic interactions lead to context-dependent dynamics so that the composition of communities is rarely predictable purely based on environmental conditions. Still, most classic theory that provides expectations for how metacommunities should respond to environmental change only includes simple biotic interactions which do not result in context dependence [@loreau2003; @gonzalez2009]. Newer models that have incorporated more complex interactions suggest that interactions can make it harder for species to track environmental changes through dispersal [@norberg2012; @urban2012; @thompson2017; @thompson2020]. Our experiment supports this expectation and further highlights the need to account for biotic interactions in our expectations of how species will shift their distributions in response to environmental change. This knowledge is critically needed for improving our ability to project how species and ecological communities will respond to future climates [@araujo2007; @svenning2014]. As our experiment demonstrates, theory to make these projections requires considering how abiotic responses, dispersal, and biotic interactions jointly govern the dynamics of ecological communities in changing conditions.
+
+# Acknowledgements
+We would like to thank Bianca Trevizan Segovia, Claire Atkinson, Katie Tjaden-McClement, and Kendrix Murray for assistance during the experiment. PLT was supported by Killam and NSERC postdoctoral fellowships. JRB was supported by a Nereus Fellowship. KAS was supported by an NSERC Alexander Graham Bell Canada Graduate Scholarship. The experiment was funded by an NSERC Discovery Grant (2018-05043) to MIO.
+
+# Data and Code Availability
+All code and data for this study are available on https://github.com/plthompson/Zoop_metacom_exp_2018. 
+
+\newpage
+
+## References
+
+::: {#refs}
+:::
+
+```{=tex}
+\newpage
+\beginsupplement
+```
+
+```{r zoopgrid, fig.align="center", fig.height = 8, fig.width = 10, fig.cap= "Zooplankton abundance vs. temperature across all mesocosms (points) and weeks (shape) sampled. Colour indicates the dispersal treatment.  The lines are the estimated mean temperature response curves under each dispersal rate (colour of line). Data for each taxon is displayed in a separate panel, with the taxon name labelled above. Credible intervals not shown.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+Zoop_long <- Zoop_data %>% 
+  gather(key = species, value = N, acari:simocephalus) %>% 
+  mutate(week = factor(week, levels = c(4,8,12), ordered = TRUE)) %>% 
+  mutate(species = str_to_title(species))
+
+predictions_abund %>% 
+  filter(week == 8) %>% 
+  ggplot(aes(x = temp, y = N, color = dispersal, fill = dispersal))+
+  geom_line(size = 1)+
+  facet_wrap(~species, scales = "free")+
+  geom_point(data = Zoop_long, aes(x = temp_mean, pch = week))+
+  coord_cartesian(xlim = c(19,29))+
+  scale_color_viridis_d(end = 0.85)+
+  scale_shape_discrete(name = "week")+
+  scale_y_sqrt(breaks = c(1,round(seq(sqrt(10),sqrt(4000), length = 13)^2, digits = -1)))+
+  xlab("mean weekly temperature (°C)")+
+  ylab("abundance")
+```
