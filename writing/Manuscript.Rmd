@@ -1,9 +1,10 @@
 ---
 title: "Biotic interactions structure zooplankton metacommunity dynamics following a summer heatwave"
-author: "| Patrick L. Thompson$^1$^[Corresponding author: patrick.thompson@zoology.ubc.ca], Coreen Forbes$^1$, Joey R. Bernhardt$^{1,2}$, \n| Kaleigh E. Davis$^1$, Keila A. Stark$^1$, Evgeniya Yangel$^1$, Felipe E. Amadeo$^1$,\n| Natalie E. Westwood$^1$, Mary I. O'Connor$^1$ \n|\n|
+author: "| Patrick L. Thompson$^1$^[Corresponding author: patrick.thompson@zoology.ubc.ca], Coreen Forbes$^1$^[forbes.coreen@gmail.com], Joey R. Bernhardt$^{1,2}$^[joey.bernhardt@uoguelph.ca], \n| Kaleigh E. Davis$^1$^[kdavis@zoology.ubc.ca], Keila A. Stark$^1$^[keilastark@zoology.ubc.ca], Evgeniya Yangel$^1$^[jane.s.yangel@gmail.com], Felipe E. Amadeo$^1$^[philamadeo@gmail.com],\n| Natalie E. Westwood$^1$^[westwood@zoology.ubc.ca], Mary I. O'Connor$^1$^[oconnor@zoology.ubc.ca] \n|\n|
   $^1$Biodiversity Research Center and the Department of Zoology,\n| University of British Columbia, Vancouver, B.C., Canada\n|
   $^2$Department of Integrative Biology,\n| University of Guelph, Guelph, Ontario, Canada\n"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
+subtitle: "Running title: Heatwave metacommunity experiment"
 output:
     bookdown::pdf_document2:
       toc: false
@@ -153,6 +154,21 @@ mcmc.list2array <-
         )
 
 ```
+## Keywords
+metacommunity, temperature, warming, dispersal, biotic interactions, species interactions 
+
+## Article type
+Letter
+
+## Word count  
+Abstract: 148  
+Main text: 4806  
+References: 52  
+Figures: 4  
+Tables: 0  
+Text boxes: 0  
+
+\newpage
 # Abstract
 Despite the key role of biotic interactions in structuring ecological communities, their influence is often overlooked in predictions of how communities respond to environmental change. Here, we present an experiment that tests hypotheses based on metacommunity theory about how abiotic responses, biotic interactions, and dispersal jointly determine the response of ecological communities to environmental perturbations. We established experimental zooplankton metacommunities across spatial temperature gradients, connected by three levels of dispersal, that experienced natural temporal variation in ambient temperature. Prior to a mid-summer heatwave, community composition varied across the spatial temperature gradients. The heatwave homogenized the metacommunities and when conditions cooled, communities diverged into multiple compositional states that were not associated with temperature. These states appear to have been driven by biotic interactions that prevented the reestablishment of the pre-heatwave thermal compositional gradients. This highlights how biotic interactions can prevent metacommunities from tracking temperature changes via dispersal-facilitated species sorting.
 
