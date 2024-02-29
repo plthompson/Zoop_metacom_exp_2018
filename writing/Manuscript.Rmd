@@ -11,7 +11,7 @@ output:
       number_sections: false
       fig_caption: true
       keep_tex: false
-csl: ecology-letters.csl
+csl: the-american-naturalist.csl
 bibliography: TEAMM_Zoop.bib
 always_allow_html: true
 link-citations: yes
@@ -220,7 +220,7 @@ We assessed the influence of our fixed and random effects using the variance par
 # Results
 The community consisted of `r ncol(m$Y)` zooplankton taxa. The mean abundance per mesocosm across the three sampling weeks ranged from `r round(min(colMeans(m$Y))/10, 2)` individuals L$^{-1}$ for Ostracoda to `r round(max(colMeans(m$Y))/10, 1)` individuals L$^{-1}$ for  *Diaphanosoma*, with a median value of `r round(median(colMeans(m$Y))/10, 1)` individuals L$^{-1}$ across all taxa. 
 
-Our experimental treatments resulted in a mean temperature difference of 2.95 \degree C ( $\pm 0.41$ \degree C SD) between the mesocosms without heaters and the mesocosms that received 300 W heaters (Figure \@ref(fig:temperature)). Ambient temperatures were moderate over the first five weeks of the experiment (until mid-July), with an average mean (max) daily temperature in the unheated mesocosms of `r all_temperature %>% filter(time < 6, wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time < 6, wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C; Figure \@ref(fig:temperature)). The warmest period of the experiment occurred from weeks six to eight (late July and early August), which resulted in an averaged mean (max) daily ambient temperatures of `r all_temperature %>% filter(time %in% c(6:8), wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% c(6:8), wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) and `r all_temperature %>% filter(time %in% c(6:8), wattage == 300) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% c(6:8), wattage == 300) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the 300W treatments. Ambient temperatures dropped following this warm period, continuing to decline over the final four weeks of the experiment, so that mean (max) daily temperatures in the unheated mesocosms averaged `r all_temperature %>% filter(time %in% max(time), wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(time %in% max(time), wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the final week.
+Our experimental treatments resulted in a mean temperature difference of 2.95 \degree C ( $\pm 0.41$ \degree C SD) between the mesocosms without heaters and the mesocosms that received 300 W heaters (Figure \@ref(fig:temperature)). Ambient temperatures were moderate over the first five weeks of the experiment (until mid-July), with an average mean (max) daily temperature in the unheated mesocosms of `r all_temperature %>% filter(date < "2018-07-19", wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(date < "2018-07-19", wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C; Figure \@ref(fig:temperature)). The warmest period of the experiment occurred from weeks six to eight (late July and early August), which resulted in an averaged mean (max) daily ambient temperatures of `r all_temperature %>% filter(date >= "2018-07-19", date <= "2018-08-02", wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(date >= "2018-07-19", date <= "2018-08-02", wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) and `r all_temperature %>% filter(date >= "2018-07-19", date <= "2018-08-02", wattage == 300) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(date >= "2018-07-19", date <= "2018-08-02", wattage == 300) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the 300W treatments. Ambient temperatures dropped following this warm period, continuing to decline over the final four weeks of the experiment, so that mean (max) daily temperatures in the unheated mesocosms averaged `r all_temperature %>% filter(date >= "2018-08-30", wattage == 0) %>% pull(temp_mean) %>% mean() %>% round(1)` \degree C (`r all_temperature %>% filter(date >= "2018-08-30", wattage == 0) %>% pull(temp_max) %>% mean() %>% round(1)` \degree C) in the final week.
 
 The temperature treatment resulted in compositional differences, but counter to H1 and consistent with H3, these differences were not constant across time (temperature x time; $F_{1,143}$ = `r round(perman$F[5],2)`, p = `r perman[[5]][5]`). Our post-hoc PERMANOVA indicated that temperature had significant effects on composition in week four (i.e, prior to the heatwave; $F_{1,47}$ = `r round(perman4$F[1],2)`, p = `r perman4[[5]][1]`), but not in week 8 (i.e., during the heatwave; $F_{1,47}$ = `r round(perman8$F[1],2)`, p = `r perman8[[5]][1]`) or 12 (i.e., after the heatwave; $F_{1,47}$ = `r round(perman12$F[1],2)`, p = `r perman12[[5]][1]`). This can be seen in the NMDS plots (Figure \@ref(fig:nmds)a), where the communities were clearly structured across the temperature treatment gradient in week 4. However, the heatwave caused the communities to converge on the same compositional state, regardless of temperature, by week 8. The communities diverged in composition following the heatwave (i.e., week 12), but these communities were no longer differentiated based on temperature as they were in week 4. 
 
@@ -564,7 +564,7 @@ Samples were collected by pouring 10 L of mesocosm water through a 64 µM sieve 
 
 \newpage
 # Supplemental Figures  
-```{r zoopgrid, fig.align="center", fig.height = 8, fig.width = 10, fig.cap= "Zooplankton abundance vs. temperature across all mesocosms (points) and weeks (shape) sampled. Colour indicates the dispersal treatment.  The lines are the estimated mean temperature response curves under each dispersal rate (colour of line). Data for each taxon is displayed in a separate panel, with the taxon name labelled above. Credible intervals not shown.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
+```{r zoopgrid, fig.align="center", fig.height = 8, fig.width = 10, fig.cap= "Zooplankton abundance vs. temperature across all mesocosms (points) and weeks (shape) sampled. Colour indicates the dispersal treatment.  The lines are the estimated mean temperature response curves under each dispersal rate (colour of line). Data for each taxon is displayed in a separate panel, with the taxon name labelled above. Abundances are shown on a square root scale. Credible intervals not shown.", echo=FALSE, warning = FALSE, results='hide', message=FALSE}
 Zoop_long <- Zoop_data %>% 
   gather(key = species, value = N, acari:simocephalus) %>% 
   mutate(week = factor(week, levels = c(4,8,12), ordered = TRUE)) %>% 
@@ -572,14 +572,14 @@ Zoop_long <- Zoop_data %>%
 
 predictions_abund %>% 
   filter(week == 8) %>% 
-  ggplot(aes(x = temp, y = N, color = dispersal, fill = dispersal))+
+  ggplot(aes(x = temp, y = N/10, color = dispersal, fill = dispersal))+
   geom_line(size = 1)+
   facet_wrap(~species, scales = "free")+
   geom_point(data = Zoop_long, aes(x = temp_mean, pch = week))+
   coord_cartesian(xlim = c(19,29))+
   scale_color_viridis_d(end = 0.85)+
   scale_shape_discrete(name = "week")+
-  scale_y_sqrt(breaks = c(1,round(seq(sqrt(10),sqrt(4000), length = 13)^2, digits = -1)))+
+  scale_y_sqrt(breaks = c(1,round(seq(sqrt(1),sqrt(400), length = 13)^2, digits = -1)))+
   xlab("mean weekly temperature (°C)")+
-  ylab("abundance")
+  ylab(expression(paste("Abundance (Ind. ",L^{-1},")", sep = "")))
 ```
