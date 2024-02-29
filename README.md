@@ -1,10 +1,10 @@
 ## Code and data associated with manuscript:
 # Biotic interactions structure zooplankton metacommunity dynamics following a summer heatwave
 
-Patrick L. Thompson<sup>^1</sup>, Coreen Forbes$^1$, Joey R. Bernhardt$^{1,2}$, Kaleigh E. Davis$^1$, Keila A. Stark$^1$, Evgeniya Yangel$^1$, Felipe E. Amadeo$^1$, Natalie E. Westwood$^1$, Mary I. O'Connor$^1$
+Patrick L. Thompson<sup>1</sup>, Coreen Forbes<sup>1</sup>, Joey R. Bernhardt<sup>1,2</sup>, Kaleigh E. Davis<sup>1</sup>, Keila A. Stark<sup>1</sup>, Evgeniya Yangel<sup>1</sup>, Felipe E. Amadeo<sup>1</sup>, Natalie E. Westwood<sup>1</sup>, Mary I. O'Connor<sup>1</sup>
 
-$^1$Biodiversity Research Center and the Department of Zoology, University of British Columbia, Vancouver, B.C., Canada  
-$^2$Department of Integrative Biology, University of Guelph, Guelph, Ontario, Canada
+<sup>1</sup>Biodiversity Research Center and the Department of Zoology, University of British Columbia, Vancouver, B.C., Canada  
+<sup>2</sup>Department of Integrative Biology, University of Guelph, Guelph, Ontario, Canada
 
 Corresponding author: patrick.thompson@zoology.ubc.ca  
 Alternate contact: oconnor@zoology.ubc.ca  
