@@ -36,7 +36,13 @@ Platform: x86_64-apple-darwin17.0 (64-bit)
 Running under: macOS Monterey 12.7.3  
 
 attached base packages:  
-[1] stats     graphics  grDevices utils     datasets  methods   base       
+* stats
+* graphics
+* grDevices
+* utils
+* datasets
+* methods
+* base       
 
 other attached packages:  
  [1] magick_2.7.3         rstan_2.21.7         StanHeaders_2.21.0-7 vegan_2.6-4          lattice_0.20-45     
