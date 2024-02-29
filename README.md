@@ -30,22 +30,22 @@ The writing folder contains:
 4. dispersal_image.png - a .png file with the image used in Figure 1 to show the experimental set up.
 5. the-american-naturalist.csl - a .csl file that defines the citation style for the journal
 
-# Software used
-R version 4.1.3 (2022-03-10)
-Platform: x86_64-apple-darwin17.0 (64-bit)
-Running under: macOS Monterey 12.7.3
+# Software used  
+R version 4.1.3 (2022-03-10)  
+Platform: x86_64-apple-darwin17.0 (64-bit)  
+Running under: macOS Monterey 12.7.3  
 
-attached base packages:
-[1] stats     graphics  grDevices utils     datasets  methods   base     
+attached base packages:  
+[1] stats     graphics  grDevices utils     datasets  methods   base       
 
-other attached packages:
+other attached packages:  
  [1] magick_2.7.3         rstan_2.21.7         StanHeaders_2.21.0-7 vegan_2.6-4          lattice_0.20-45     
  [6] permute_0.9-7        abind_1.4-5          lubridate_1.8.0      Hmsc_3.0-11          coda_0.19-4         
 [11] patchwork_1.1.1      forcats_0.5.1        stringr_1.5.0        dplyr_1.0.10         purrr_1.0.1         
 [16] readr_2.1.2          tidyr_1.3.0          tibble_3.1.8         ggplot2_3.4.0        tidyverse_1.3.1     
-[21] kableExtra_1.3.4     knitr_1.38           bibtex_0.4.2.3       knitcitations_1.0.12
+[21] kableExtra_1.3.4     knitr_1.38           bibtex_0.4.2.3       knitcitations_1.0.12  
 
-loaded via a namespace (and not attached):
+loaded via a namespace (and not attached):  
  [1] colorspace_2.1-0   ellipsis_0.3.2     fs_1.5.2           rstudioapi_0.13    farver_2.1.1       MatrixModels_0.5-0
  [7] fansi_1.0.4        RefManageR_1.3.0   xml2_1.3.3         codetools_0.2-18   splines_4.1.3      spam_2.8-0        
 [13] jsonlite_1.8.0     pROC_1.18.0        mcmc_0.9-7         broom_0.8.0        cluster_2.1.2      dbplyr_2.1.1      
