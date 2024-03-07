@@ -56,7 +56,8 @@ theme_set(plt_theme)
 ```
 
 ```{r, loadData, echo=FALSE, include = FALSE}
-load("../data/zoop_data.RData")
+Zoop_data <- read.csv("../data/Zoop_data.csv")
+all_temperature <- read.csv("../data/all_temperature.csv")
 ```
 
 ```{r, HMSC, echo=FALSE, include = FALSE}
