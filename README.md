@@ -12,7 +12,13 @@ Alternate contact: oconnor@zoology.ubc.ca
 # Abstract
 Despite the key role of biotic interactions in structuring ecological communities, their influence is often overlooked in predictions of how communities respond to abiotic environmental change. Here, we present an experiment that tests hypotheses based on metacommunity theory about how abiotic responses, biotic interactions and dispersal jointly determine the response of ecological communities to abiotic perturbations. We established experimental zooplankton metacommunities that included a temperature gradient among local communities in each metacommunity. Metacommunities were exposed to one of three dispersal rate treatments. After four weeks, differences in community composition were explained by temperature and this spatial structure was strongest in metacommunities with lower rates of dispersal. A midsummer natural heatwave strongly shifted all communities toward heat tolerant taxa and when conditions cooled, communities diverged into compositional states that were no longer explained by experimental temperature and dispersal treatments. Although our experimental design did not allow us to directly assess the influence of biotic interactions, these results are consistent with the hypothesis that biotic interactions resulted in post-heatwave successional dynamics that prevented the reestablishment of pre-heatwave signatures of temperature on community composition. These results highlight the need to better account for the role of biotic interactions in the theories that guide our expectations for how ecological communities will respond to future abiotic environmental change.  
 
-# Responsibilities  
+### Research Domain  
+Biological Sciences, Ecology
+
+### Keywords
+metacommunity, temperature, warming, dispersal, biotic interactions, species interactions 
+
+### Responsibilities  
 All authors contributed to data collection. The code was written by Patrick Thompson.  
          
 # Repository contents  
