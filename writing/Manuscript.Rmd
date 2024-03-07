@@ -103,10 +103,15 @@ test.time <- system.time(
 
 print(paste("estimated to take", round(((samples*thin + transient) * 4/4 * test.time[3]/20) / 60/60,digits = 2), "hours", sep = " "))
 
-#m <- sampleMcmc(m, thin = thin, samples = samples, transient = transient, nChains = 4, nParallel = 4)
-#save(m, file = "../data/zooplankton/HMSC_m.RData")
+if(file.exists("../data/HMSC_m.RData")){
+  load("../data/HMSC_m.RData")
+} else{
+  m <- sampleMcmc(m, thin = thin, samples = samples, transient = transient, nChains = 4, nParallel = 4)
+  save(m, file = "../data/zooplankton/HMSC_m.RData")
+}
 
-load("../data/HMSC_m.RData")
+
+
 
 preds = computePredictedValues(m)
 MF <- evaluateModelFit(hM = m, predY = preds)
@@ -138,22 +143,22 @@ mcmc.list2array <-
     return(arr)
   }
 
-  mpost <- convertToCodaObject(m)
-  beta <- mcmc.list2array(mpost$Beta)
-  ge.beta <- sapply(1:dim(beta)[3], FUN = function(x) Rhat(sims = beta[,,x]))
-  gamma <- mcmc.list2array(mpost$Gamma)
-  ge.gamma <- sapply(1:dim(gamma)[3], FUN = function(x) Rhat(sims = gamma[,,x]))
-  V <- mcmc.list2array(mpost$V)
-  ge.V <- sapply(1:dim(V)[3], FUN = function(x) Rhat(sims = V[,,x]))
-  Omega_trawl <- mcmc.list2array(mpost$Omega[[1]])
-  ge.omega_trawl <- sapply(1:dim(Omega_trawl)[3], FUN = function(x) Rhat(sims = Omega_trawl[,,x]))
-  Omega_time <- mcmc.list2array(mpost$Omega[[2]])
-  ge.omega_time <- sapply(1:dim(Omega_time)[3], FUN = function(x) Rhat(sims = Omega_time[,,x]))
+mpost <- convertToCodaObject(m)
+beta <- mcmc.list2array(mpost$Beta)
+ge.beta <- sapply(1:dim(beta)[3], FUN = function(x) Rhat(sims = beta[,,x]))
+gamma <- mcmc.list2array(mpost$Gamma)
+ge.gamma <- sapply(1:dim(gamma)[3], FUN = function(x) Rhat(sims = gamma[,,x]))
+V <- mcmc.list2array(mpost$V)
+ge.V <- sapply(1:dim(V)[3], FUN = function(x) Rhat(sims = V[,,x]))
+Omega_trawl <- mcmc.list2array(mpost$Omega[[1]])
+ge.omega_trawl <- sapply(1:dim(Omega_trawl)[3], FUN = function(x) Rhat(sims = Omega_trawl[,,x]))
+Omega_time <- mcmc.list2array(mpost$Omega[[2]])
+ge.omega_time <- sapply(1:dim(Omega_time)[3], FUN = function(x) Rhat(sims = Omega_time[,,x]))
 
-  converge.df <- rbind(data.frame(parameter = "beta", ge = ge.beta),
-        data.frame(parameter = "gamma", ge = ge.gamma),
-        data.frame(parameter = "V", ge = ge.V)
-        )
+converge.df <- rbind(data.frame(parameter = "beta", ge = ge.beta),
+                     data.frame(parameter = "gamma", ge = ge.gamma),
+                     data.frame(parameter = "V", ge = ge.V)
+)
 
 ```
 ### Keywords
@@ -310,10 +315,10 @@ temp_hulls <- NMDS.df %>%
   group_by(week_label, watts, week) %>% 
   summarise(hull = chull(NMDS1, NMDS2)) %>% 
   left_join(NMDS.df %>% 
-  group_by(week_label, watts, week) %>% 
-  arrange(week, watts) %>% 
-  mutate(hull = 1:n()) %>% 
-    select(hull, week, watts, NMDS1, NMDS2))
+              group_by(week_label, watts, week) %>% 
+              arrange(week, watts) %>% 
+              mutate(hull = 1:n()) %>% 
+              select(hull, week, watts, NMDS1, NMDS2))
 
 disp_hulls <- NMDS.df %>% 
   group_by(week_label, dispersal, week) %>% 
@@ -342,7 +347,7 @@ NMDS2 <- ggplot(NMDS.df, aes(x = NMDS1, y = NMDS2, color = dispersal))+
   theme(strip.background = element_rect(colour=NA, fill=NA))+
   scale_color_viridis_d(end = 0.85, name = "dispersal")+
   scale_fill_viridis_d(end = 0.85, name = "dispersal")
-  
+
 
 NMDS1 / NMDS2 +  plot_annotation(tag_levels = "a")
 ```
@@ -518,42 +523,42 @@ predictions_abund$species <- factor(str_to_title(predictions_abund$species), lev
 predictions_abund$dispersal <- factor(predictions_abund$dispersal, levels = c("none", "low", "high"), ordered = TRUE)
 
 filter(predictions_abund, week == 4, dispersal == "none") %>% 
-    group_by(species) %>% 
-    mutate(max_temp = temp[N == max(N)]) %>%
-    filter(temp<=30, temp >=18) %>% 
-    ggplot(aes(x = temp, y = N/10, group = species, color = fct_reorder(species, max_temp, .desc = TRUE), fill = fct_reorder(species, max_temp, .desc = TRUE)))+
-    geom_ribbon(aes(ymin = N_low/10, ymax = N_high/10), alpha = 0.5, col = NA)+
-    geom_line(size = 1)+
-    ylab(expression(paste("Predicted abundance (Ind. ",L^{-1},")", sep = "")))+
-    #scale_color_manual(values = c(brewer.pal(n = 6, name = "Greys")[3:6],rev(viridis(n = 6, option = "B", begin = 0.2, end = 0.8))), name = "")+
-    #scale_fill_manual(values = c(NA,NA,NA,NA,rev(viridis(n = 6, option = "B", begin  = 0.2, end = 0.8))), guide = "none")+
-    #scale_color_manual(values = c(brewer.pal(n = 4, name = "Greys")[3:4],brewer.pal(n = 8, name = "RdYlBu")), name = "")+
-    #scale_fill_manual(values = c(NA,NA,brewer.pal(n = 8, name = "RdYlBu")), guide = "none")+
-    scale_color_brewer(palette = "RdYlBu", name = "")+
-    scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
-    theme_classic()+
-    xlab("Mean weekly temperature °C")+
-    theme(legend.justification=c(0,1), legend.position=c(0,1.05),
-          legend.background = element_rect(fill=NA))+
-    coord_cartesian(ylim = c(1,120))+
-    scale_y_sqrt(breaks = round(seq(sqrt(1),sqrt(120), length = 6)^2, digits = -1))+
-
+  group_by(species) %>% 
+  mutate(max_temp = temp[N == max(N)]) %>%
+  filter(temp<=30, temp >=18) %>% 
+  ggplot(aes(x = temp, y = N/10, group = species, color = fct_reorder(species, max_temp, .desc = TRUE), fill = fct_reorder(species, max_temp, .desc = TRUE)))+
+  geom_ribbon(aes(ymin = N_low/10, ymax = N_high/10), alpha = 0.5, col = NA)+
+  geom_line(size = 1)+
+  ylab(expression(paste("Predicted abundance (Ind. ",L^{-1},")", sep = "")))+
+  #scale_color_manual(values = c(brewer.pal(n = 6, name = "Greys")[3:6],rev(viridis(n = 6, option = "B", begin = 0.2, end = 0.8))), name = "")+
+  #scale_fill_manual(values = c(NA,NA,NA,NA,rev(viridis(n = 6, option = "B", begin  = 0.2, end = 0.8))), guide = "none")+
+  #scale_color_manual(values = c(brewer.pal(n = 4, name = "Greys")[3:4],brewer.pal(n = 8, name = "RdYlBu")), name = "")+
+  #scale_fill_manual(values = c(NA,NA,brewer.pal(n = 8, name = "RdYlBu")), guide = "none")+
+  scale_color_brewer(palette = "RdYlBu", name = "")+
+  scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
+  theme_classic()+
+  xlab("Mean weekly temperature °C")+
+  theme(legend.justification=c(0,1), legend.position=c(0,1.05),
+        legend.background = element_rect(fill=NA))+
+  coord_cartesian(ylim = c(1,120))+
+  scale_y_sqrt(breaks = round(seq(sqrt(1),sqrt(120), length = 6)^2, digits = -1))+
+  
   filter(predictions_abund, week == 4, dispersal == "none") %>% 
-    group_by(species) %>% 
-    mutate(max_temp = temp[N == max(N)]) %>%
-    filter(temp<=30, temp >=18) %>% 
-    mutate(N_norm = N_mean/max(N_mean)) %>%
-    ggplot(aes(x = temp, y = N_norm, group = species, color = fct_reorder(species, max_temp, .desc = TRUE)))+
-    #geom_ribbon(aes(ymin = N_low, ymax = N_high), alpha = 0.2, col = NA)+
-    geom_line(size = 1)+
-    ylab("Normalized predicted abundance")+
-    scale_color_brewer(palette = "RdYlBu", name = "", guide = "none")+
-    scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
-    theme_classic()+
-    xlab("Mean weekly temperature °C") + plot_annotation(tag_levels = "a")
+  group_by(species) %>% 
+  mutate(max_temp = temp[N == max(N)]) %>%
+  filter(temp<=30, temp >=18) %>% 
+  mutate(N_norm = N_mean/max(N_mean)) %>%
+  ggplot(aes(x = temp, y = N_norm, group = species, color = fct_reorder(species, max_temp, .desc = TRUE)))+
+  #geom_ribbon(aes(ymin = N_low, ymax = N_high), alpha = 0.2, col = NA)+
+  geom_line(size = 1)+
+  ylab("Normalized predicted abundance")+
+  scale_color_brewer(palette = "RdYlBu", name = "", guide = "none")+
+  scale_fill_brewer(palette = "RdYlBu", name = "", guide = "none")+
+  theme_classic()+
+  xlab("Mean weekly temperature °C") + plot_annotation(tag_levels = "a")
 ```
 
-  
+
 \beginsupplement
 \clearpage
 # Supplemental Methods  
