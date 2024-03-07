@@ -165,25 +165,27 @@ converge.df <- rbind(data.frame(parameter = "beta", ge = ge.beta),
 metacommunity, temperature, warming, dispersal, biotic interactions, species interactions 
 
 ### Article type
-Letter
+Major Article
 
 ### Word count  
-Abstract: 148  
-Main text: 4806  
-References: 52  
+Abstract: 199  
+Main text: 5422  
+References: 51  
 Figures: 4  
 Tables: 0  
 Text boxes: 0  
+Supplemental methods: 459
+Supplemental figures: 1
 
 ### Statement of Authorship  
 PLT and MIO conceived of and designed the study with input from CF and JRB. MIO acquired funding and provided resources for the experiment. PLT, CF, JRB, KED, KAS, EY, and NEW set up and conducted the experiment. FEA performed the zooplankton identification and counting. PLT performed the analysis, prepared the figures, and drafted the manuscript. All authors provided substantive feedback and edits to the manuscript. 
 
 ### Data Accessibility Statement
-All code and data for this study are available on https://github.com/plthompson/Zoop_metacom_exp_2018. All data will be archived in an appropriate public repository upon acceptance and the doi will be included in the manuscript.
+All code and data for this study are available on https://github.com/plthompson/Zoop_metacom_exp_2018 and are archived on Dryad - .
 
 \newpage
 # Abstract
-Despite the key role of biotic interactions in structuring ecological communities, their influence is often overlooked in predictions of how communities respond to abiotic environmental change. Here, we present an experiment that tests hypotheses based on metacommunity theory about how abiotic responses, biotic interactions and dispersal jointly determine the response of ecological communities to abiotic perturbations. We established experimental zooplankton metacommunities that included a temperature gradient among local communities in each metacommunity. Metacommunities were exposed to one of three dispersal rate treatments. After four weeks, differences in community composition were explained by temperature and this spatial structure was strongest in metacommunities with lower rates of dispersal. A midsummer natural heatwave strongly shifted all communities toward heat tolerant taxa and when conditions cooled, communities diverged into compositional states that were no longer explained by experimental temperature and dispersal treatments. Although our experimental design did not allow us to directly assess the influence of biotic interactions, these results are consistent with the hypothesis that biotic interactions resulted in post-heatwave successional dynamics that prevented the reestablishment of pre-heatwave signatures of temperature on community composition. These results highlight the need to better account for the role of biotic interactions in the theories that guide our expectations for how ecological communities will respond to future abiotic environmental change.
+Despite the key role of biotic interactions in structuring ecological communities, their influence is often overlooked in predictions of how communities respond to environmental change. Here, we present an experimental test of hypotheses based on metacommunity theory about how abiotic responses, biotic interactions and dispersal determine the response of ecological communities to abiotic perturbations. We established experimental zooplankton metacommunities that included a temperature gradient among local communities in each metacommunity. Metacommunities were exposed to one of three dispersal rate treatments. After four weeks, differences in community composition were explained by temperature and this spatial structure was strongest in metacommunities with lower dispersal. A midsummer natural heatwave shifted all communities toward heat-tolerant taxa and when conditions cooled, communities diverged into compositional states that were no longer explained by the temperature and dispersal treatments. Although our experimental design did not allow us to directly assess the influence of biotic interactions, these results are consistent with the hypothesis that biotic interactions resulted in post-heatwave dynamics that prevented the reestablishment of the temperature structured pre-heatwave community composition. These results highlight the need to better account for biotic interactions in the theories that guide our expectations for how ecological communities respond to environmental change.
 
 # Introduction
 
